@@ -1,297 +1,202 @@
 /**
  * tRPC Router
- * API routes for the Bitcoin Dev Intel dashboard
+ * Uses Supabase REST API for serverless compatibility
  */
 
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import { db } from '../../lib/supabase';
-import { bips, repositories, activityEvents, syncLogs } from '../../db/schema';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { createClient } from '@supabase/supabase-js';
 
-// =============================================================================
-// tRPC Instance
-// =============================================================================
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_ANON_KEY || ''
+);
 
 const t = initTRPC.create();
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-// =============================================================================
-// Router Definition
-// =============================================================================
-
 export const appRouter = t.router({
-  // ---------------------------------------------------------------------------
-  // BIPs Router
-  // ---------------------------------------------------------------------------
+  // BIPs
   bips: t.router({
-    /**
-     * List BIPs with optional filtering and pagination
-     */
     list: t.procedure
       .input(
-        z
-          .object({
-            status: z.string().optional(),
-            type: z.string().optional(),
-            limit: z.number().min(1).max(100).default(50),
-            offset: z.number().min(0).default(0),
-          })
-          .optional()
+        z.object({
+          status: z.string().optional(),
+          limit: z.number().min(1).max(100).default(50),
+          offset: z.number().min(0).default(0),
+        }).optional()
       )
       .query(async ({ input }) => {
-        const { status, type, limit = 50, offset = 0 } = input || {};
+        const { status, limit = 50, offset = 0 } = input || {};
 
-        let query = db.select().from(bips);
+        let query = supabase
+          .from('bips')
+          .select('*')
+          .order('number', { ascending: false })
+          .range(offset, offset + limit - 1);
 
         if (status) {
-          query = query.where(eq(bips.status, status)) as typeof query;
+          query = query.eq('status', status);
         }
 
-        if (type) {
-          query = query.where(eq(bips.type, type)) as typeof query;
-        }
-
-        return query.orderBy(desc(bips.number)).limit(limit).offset(offset);
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
       }),
 
-    /**
-     * Get a single BIP by its number
-     */
     getByNumber: t.procedure.input(z.number()).query(async ({ input }) => {
-      const result = await db
-        .select()
-        .from(bips)
-        .where(eq(bips.number, input))
-        .limit(1);
+      const { data, error } = await supabase
+        .from('bips')
+        .select('*')
+        .eq('number', input)
+        .single();
 
-      return result[0] || null;
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
     }),
 
-    /**
-     * Get BIP statistics
-     */
     stats: t.procedure.query(async () => {
-      const allBips = await db.select().from(bips);
+      const { data, error } = await supabase.from('bips').select('status, type');
+      if (error) throw error;
 
       const statusCounts: Record<string, number> = {};
       const typeCounts: Record<string, number> = {};
 
-      for (const bip of allBips) {
+      for (const bip of data || []) {
         statusCounts[bip.status] = (statusCounts[bip.status] || 0) + 1;
         typeCounts[bip.type] = (typeCounts[bip.type] || 0) + 1;
       }
 
       return {
-        total: allBips.length,
+        total: data?.length || 0,
         byStatus: statusCounts,
         byType: typeCounts,
       };
     }),
   }),
 
-  // ---------------------------------------------------------------------------
-  // Repositories Router
-  // ---------------------------------------------------------------------------
+  // Repositories
   repos: t.router({
-    /**
-     * List all tracked repositories
-     */
     list: t.procedure.query(async () => {
-      return db
-        .select()
-        .from(repositories)
-        .orderBy(desc(repositories.stargazersCount));
+      const { data, error } = await supabase
+        .from('repositories')
+        .select('*')
+        .order('stargazers_count', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
     }),
 
-    /**
-     * Get a repository by owner and name
-     */
-    getByName: t.procedure
-      .input(
-        z.object({
-          owner: z.string(),
-          name: z.string(),
-        })
-      )
-      .query(async ({ input }) => {
-        const result = await db
-          .select()
-          .from(repositories)
-          .where(eq(repositories.owner, input.owner))
-          .limit(10);
+    getByName: t.procedure.input(z.string()).query(async ({ input }) => {
+      const { data, error } = await supabase
+        .from('repositories')
+        .select('*')
+        .eq('full_name', input)
+        .single();
 
-        return result.find((r) => r.name === input.name) || null;
-      }),
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    }),
 
-    /**
-     * Get repository statistics summary
-     */
     stats: t.procedure.query(async () => {
-      const allRepos = await db.select().from(repositories);
+      const { data, error } = await supabase.from('repositories').select('*');
+      if (error) throw error;
 
-      const totalStars = allRepos.reduce(
-        (sum, r) => sum + (r.stargazersCount || 0),
-        0
-      );
-      const totalForks = allRepos.reduce(
-        (sum, r) => sum + (r.forksCount || 0),
-        0
-      );
-      const totalOpenIssues = allRepos.reduce(
-        (sum, r) => sum + (r.openIssuesCount || 0),
-        0
-      );
-      const totalOpenPRs = allRepos.reduce(
-        (sum, r) => sum + (r.openPRsCount || 0),
-        0
-      );
-      const totalCommits30d = allRepos.reduce(
-        (sum, r) => sum + (r.commits30d || 0),
-        0
-      );
+      const totalStars = data?.reduce((sum, r) => sum + (r.stargazers_count || 0), 0) || 0;
+      const totalForks = data?.reduce((sum, r) => sum + (r.forks_count || 0), 0) || 0;
 
       return {
-        repositoryCount: allRepos.length,
+        totalRepos: data?.length || 0,
         totalStars,
         totalForks,
-        totalOpenIssues,
-        totalOpenPRs,
-        totalCommits30d,
       };
     }),
   }),
 
-  // ---------------------------------------------------------------------------
-  // Activity Router
-  // ---------------------------------------------------------------------------
+  // Activity
   activity: t.router({
-    /**
-     * Get recent activity events
-     */
     recent: t.procedure
       .input(
-        z
-          .object({
-            types: z.array(z.string()).optional(),
-            repoOwner: z.string().optional(),
-            repoName: z.string().optional(),
-            limit: z.number().min(1).max(100).default(20),
-            offset: z.number().min(0).default(0),
-          })
-          .optional()
+        z.object({
+          types: z.array(z.string()).optional(),
+          limit: z.number().min(1).max(100).default(20),
+        }).optional()
       )
       .query(async ({ input }) => {
-        const { types, repoOwner, repoName, limit = 20, offset = 0 } = input || {};
+        const { types, limit = 20 } = input || {};
 
-        let query = db.select().from(activityEvents);
+        let query = supabase
+          .from('activity_events')
+          .select('*')
+          .order('event_timestamp', { ascending: false })
+          .limit(limit);
 
         if (types && types.length > 0) {
-          query = query.where(inArray(activityEvents.eventType, types)) as typeof query;
+          query = query.in('event_type', types);
         }
 
-        if (repoOwner) {
-          query = query.where(eq(activityEvents.repoOwner, repoOwner)) as typeof query;
-        }
-
-        if (repoName) {
-          query = query.where(eq(activityEvents.repoName, repoName)) as typeof query;
-        }
-
-        return query
-          .orderBy(desc(activityEvents.eventTimestamp))
-          .limit(limit)
-          .offset(offset);
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
       }),
 
-    /**
-     * Get activity by type
-     */
-    byType: t.procedure
-      .input(
-        z.object({
-          type: z.string(),
-          limit: z.number().min(1).max(100).default(20),
-        })
-      )
-      .query(async ({ input }) => {
-        return db
-          .select()
-          .from(activityEvents)
-          .where(eq(activityEvents.eventType, input.type))
-          .orderBy(desc(activityEvents.eventTimestamp))
-          .limit(input.limit);
-      }),
+    byType: t.procedure.input(z.string()).query(async ({ input }) => {
+      const { data, error } = await supabase
+        .from('activity_events')
+        .select('*')
+        .eq('event_type', input)
+        .order('event_timestamp', { ascending: false })
+        .limit(50);
 
-    /**
-     * Get activity statistics
-     */
+      if (error) throw error;
+      return data || [];
+    }),
+
     stats: t.procedure.query(async () => {
-      const allEvents = await db.select().from(activityEvents);
+      const { data, error } = await supabase.from('activity_events').select('event_type');
+      if (error) throw error;
 
       const typeCounts: Record<string, number> = {};
-      const repoCounts: Record<string, number> = {};
-
-      for (const event of allEvents) {
-        typeCounts[event.eventType] = (typeCounts[event.eventType] || 0) + 1;
-
-        if (event.repoOwner && event.repoName) {
-          const repoKey = `${event.repoOwner}/${event.repoName}`;
-          repoCounts[repoKey] = (repoCounts[repoKey] || 0) + 1;
-        }
+      for (const event of data || []) {
+        typeCounts[event.event_type] = (typeCounts[event.event_type] || 0) + 1;
       }
 
       return {
-        total: allEvents.length,
+        total: data?.length || 0,
         byType: typeCounts,
-        byRepository: repoCounts,
       };
     }),
   }),
 
-  // ---------------------------------------------------------------------------
-  // Sync Router
-  // ---------------------------------------------------------------------------
+  // Sync status
   sync: t.router({
-    /**
-     * Get recent sync status logs
-     */
     status: t.procedure.query(async () => {
-      const logs = await db
-        .select()
-        .from(syncLogs)
-        .orderBy(desc(syncLogs.startedAt))
+      const { data, error } = await supabase
+        .from('sync_logs')
+        .select('*')
+        .order('started_at', { ascending: false })
         .limit(5);
 
-      return logs;
+      if (error) throw error;
+      return data || [];
     }),
 
-    /**
-     * Get the last sync for each type
-     */
-    lastByType: t.procedure.query(async () => {
-      const allLogs = await db
-        .select()
-        .from(syncLogs)
-        .orderBy(desc(syncLogs.startedAt));
+    lastByType: t.procedure.input(z.string()).query(async ({ input }) => {
+      const { data, error } = await supabase
+        .from('sync_logs')
+        .select('*')
+        .eq('sync_type', input)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      const lastByType: Record<string, typeof allLogs[0]> = {};
-
-      for (const log of allLogs) {
-        if (!lastByType[log.syncType]) {
-          lastByType[log.syncType] = log;
-        }
-      }
-
-      return lastByType;
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
     }),
   }),
 });
-
-// =============================================================================
-// Type Exports
-// =============================================================================
 
 export type AppRouter = typeof appRouter;
