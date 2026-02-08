@@ -217,23 +217,14 @@ export default async function handler(
   }
 
   try {
-    // Debug: log what Vercel sends us
-    console.log('Request URL:', req.url);
-    console.log('Query params:', JSON.stringify(req.query));
-
     // Extract procedure path from dynamic route parameter
     // Vercel passes [trpc] as req.query.trpc
     const procedurePath = Array.isArray(req.query.trpc)
       ? req.query.trpc.join('.')
       : (req.query.trpc as string);
 
-    console.log('Procedure path:', procedurePath);
-
     if (!procedurePath) {
-      res.status(400).json({
-        error: 'Missing procedure path',
-        debug: { url: req.url, query: req.query },
-      });
+      res.status(400).json({ error: 'Missing procedure path' });
       return;
     }
 
@@ -252,25 +243,14 @@ export default async function handler(
     // Create a caller
     const caller = appRouter.createCaller({});
 
-    // Navigate to the procedure
+    // Navigate to the procedure using the path
+    // tRPC caller is a proxy, so we access properties dynamically
     const pathParts = procedurePath.split('.');
-    let procedure: unknown = caller;
 
+    // Use eval-like dynamic access for proxy objects
+    let procedure: unknown = caller;
     for (const part of pathParts) {
-      console.log('Looking for part:', part, 'in', Object.keys(procedure as object));
-      if (procedure && typeof procedure === 'object' && part in procedure) {
-        procedure = (procedure as Record<string, unknown>)[part];
-      } else {
-        res.status(404).json({
-          error: `Procedure not found: ${procedurePath}`,
-          debug: {
-            pathParts,
-            currentPart: part,
-            availableKeys: procedure ? Object.keys(procedure as object) : [],
-          },
-        });
-        return;
-      }
+      procedure = (procedure as Record<string, unknown>)[part];
     }
 
     // Call the procedure
