@@ -112,7 +112,7 @@ export const activityEvents = pgTable(
     author: varchar('author', { length: 255 }),
     authorAvatarUrl: text('author_avatar_url'),
     htmlUrl: text('html_url'),
-    githubId: integer('github_id'),
+    githubId: integer('github_id').unique(), // Unique for upsert
     bipNumber: integer('bip_number'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}),
     eventTimestamp: timestamp('event_timestamp', { withTimezone: true }).notNull(),
