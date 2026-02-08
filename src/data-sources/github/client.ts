@@ -438,6 +438,76 @@ export class GitHubClient {
   getCachedRateLimitInfo(resource: string): RateLimitInfo | undefined {
     return this.rateLimiter.getRateLimitInfo(resource);
   }
+
+  // ===========================================================================
+  // File Content Methods
+  // ===========================================================================
+
+  /**
+   * Get contents of a file from a repository
+   */
+  async getFileContents(
+    owner: string,
+    repo: string,
+    path: string,
+    ref?: string
+  ): Promise<{ content: string; sha: string; path: string }> {
+    const response = await this.request('core', () =>
+      this.octokit.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref,
+      }) as Promise<{
+        data: { content?: string; sha: string; path: string; encoding?: string };
+        headers: Record<string, string | undefined>;
+      }>
+    );
+
+    const data = response as { content?: string; sha: string; path: string; encoding?: string };
+
+    if (!data.content) {
+      throw new GitHubError('File content not available', 400);
+    }
+
+    // GitHub returns base64 encoded content
+    const content = Buffer.from(data.content, 'base64').toString('utf-8');
+
+    return {
+      content,
+      sha: data.sha,
+      path: data.path,
+    };
+  }
+
+  /**
+   * List contents of a directory in a repository
+   */
+  async listDirectoryContents(
+    owner: string,
+    repo: string,
+    path: string = ''
+  ): Promise<Array<{ name: string; path: string; type: 'file' | 'dir'; sha: string }>> {
+    const response = await this.request('core', () =>
+      this.octokit.repos.getContent({
+        owner,
+        repo,
+        path,
+      }) as Promise<{
+        data: Array<{ name: string; path: string; type: string; sha: string }>;
+        headers: Record<string, string | undefined>;
+      }>
+    );
+
+    const items = response as Array<{ name: string; path: string; type: string; sha: string }>;
+
+    return items.map(item => ({
+      name: item.name,
+      path: item.path,
+      type: item.type as 'file' | 'dir',
+      sha: item.sha,
+    }));
+  }
 }
 
 // ============================================================================
