@@ -217,9 +217,11 @@ export default async function handler(
   }
 
   try {
-    // Extract procedure path from URL
-    const urlPath = req.url || '';
-    const procedurePath = urlPath.replace(/^\/api\/trpc\/?/, '').split('?')[0];
+    // Extract procedure path from dynamic route parameter
+    // Vercel passes [trpc] as req.query.trpc
+    const procedurePath = Array.isArray(req.query.trpc)
+      ? req.query.trpc.join('.')
+      : (req.query.trpc as string);
 
     if (!procedurePath) {
       res.status(400).json({ error: 'Missing procedure path' });
