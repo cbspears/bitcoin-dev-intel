@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { trpc, createTRPCClient, createQueryClient } from '../lib/trpc'
 import { MainLayout } from './layouts/MainLayout'
 import { ActivityFeed } from './components/ActivityFeed'
 import { BIPList } from './components/BIPList'
@@ -83,17 +86,24 @@ function SettingsPage() {
 }
 
 export default function App() {
+  const [queryClient] = useState(() => createQueryClient())
+  const [trpcClient] = useState(() => createTRPCClient())
+
   return (
-    <Router>
-      <MainLayout>
-        <Routes>
-          <Route path="/" element={<DashboardHome />} />
-          <Route path="/activity" element={<ActivityPage />} />
-          <Route path="/bips" element={<BIPsPage />} />
-          <Route path="/repos" element={<ReposPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Routes>
-      </MainLayout>
-    </Router>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <MainLayout>
+            <Routes>
+              <Route path="/" element={<DashboardHome />} />
+              <Route path="/activity" element={<ActivityPage />} />
+              <Route path="/bips" element={<BIPsPage />} />
+              <Route path="/repos" element={<ReposPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </MainLayout>
+        </Router>
+      </QueryClientProvider>
+    </trpc.Provider>
   )
 }
