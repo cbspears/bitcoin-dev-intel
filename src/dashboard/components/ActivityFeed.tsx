@@ -107,28 +107,28 @@ export function ActivityFeed() {
         <CardTitle className="text-lg">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {activity.map((item) => {
-          const eventType = item.eventType as EventType
+        {activity.map((item: Record<string, unknown>) => {
+          const eventType = (item.event_type as string) as EventType
           const badgeVariant = typeColors[eventType] || 'default'
-          const label = typeLabels[eventType] || item.eventType
-          const repoFullName = item.repoOwner && item.repoName
-            ? `${item.repoOwner}/${item.repoName}`
+          const label = typeLabels[eventType] || (item.event_type as string)
+          const repoFullName = item.repo_owner && item.repo_name
+            ? `${item.repo_owner}/${item.repo_name}`
             : 'Unknown repo'
 
           return (
             <div
-              key={item.id}
+              key={item.id as number}
               className="flex items-start gap-3 rounded-md border border-border p-3"
             >
               <Badge variant={badgeVariant}>
                 {label}
               </Badge>
               <div className="flex-1 space-y-1">
-                <p className="text-sm font-medium leading-tight">{item.title}</p>
+                <p className="text-sm font-medium leading-tight">{item.title as string}</p>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{repoFullName}</span>
-                  {item.author && <span>by {item.author}</span>}
-                  <span>{formatRelativeTime(item.eventTimestamp)}</span>
+                  {item.author && <span>by {item.author as string}</span>}
+                  <span>{formatRelativeTime(item.event_timestamp as string)}</span>
                 </div>
               </div>
             </div>

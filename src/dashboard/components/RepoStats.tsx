@@ -62,15 +62,15 @@ export function RepoStats() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {repos.map((repo) => (
+          {repos.map((repo: Record<string, unknown>) => (
             <div
-              key={repo.fullName}
+              key={repo.full_name as string}
               className="rounded-md border border-border p-3"
             >
               <div className="mb-3 flex items-center gap-2">
                 <GitBranch className="h-4 w-4 text-primary" />
                 <span className="font-mono text-sm font-semibold">
-                  {repo.fullName}
+                  {repo.full_name as string}
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-2 text-center">
@@ -78,7 +78,7 @@ export function RepoStats() {
                   <div className="flex items-center justify-center gap-1">
                     <Star className="h-3 w-3 text-yellow-500" />
                     <span className="text-sm font-semibold">
-                      {formatNumber(repo.stargazersCount || 0)}
+                      {formatNumber((repo.stargazers_count as number) || 0)}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">Stars</p>
@@ -86,7 +86,7 @@ export function RepoStats() {
                 <div className="rounded bg-secondary/50 p-2">
                   <div className="flex items-center justify-center gap-1">
                     <GitPullRequest className="h-3 w-3 text-green-500" />
-                    <span className="text-sm font-semibold">{repo.openPRsCount || 0}</span>
+                    <span className="text-sm font-semibold">{(repo.open_prs_count as number) || 0}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">Open PRs</p>
                 </div>
@@ -94,7 +94,7 @@ export function RepoStats() {
                   <div className="flex items-center justify-center gap-1">
                     <GitBranch className="h-3 w-3 text-red-500" />
                     <span className="text-sm font-semibold">
-                      {repo.openIssuesCount || 0}
+                      {(repo.open_issues_count as number) || 0}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">Issues</p>
@@ -103,7 +103,7 @@ export function RepoStats() {
                   <div className="flex items-center justify-center gap-1">
                     <GitCommit className="h-3 w-3 text-blue-500" />
                     <span className="text-sm font-semibold">
-                      {repo.commits30d || 0}
+                      {(repo.commits_30d as number) || 0}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">30d Commits</p>
