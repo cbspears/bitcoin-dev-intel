@@ -4,7 +4,7 @@
  */
 
 import { createTRPCReact } from '@trpc/react-query';
-import { httpBatchLink, loggerLink } from '@trpc/client';
+import { httpLink, loggerLink } from '@trpc/client';
 import { QueryClient } from '@tanstack/react-query';
 import type { AppRouter } from '../api/trpc/router';
 
@@ -53,15 +53,9 @@ export function createTRPCClient() {
           process.env.NODE_ENV === 'development' ||
           (opts.direction === 'down' && opts.result instanceof Error),
       }),
-      // Batch HTTP requests
-      httpBatchLink({
+      // HTTP requests (no batching - our simple handler doesn't support it)
+      httpLink({
         url: `${getBaseUrl()}/api/trpc`,
-        // Add custom headers if needed
-        headers() {
-          return {
-            // Add auth headers here if needed
-          };
-        },
       }),
     ],
   });
